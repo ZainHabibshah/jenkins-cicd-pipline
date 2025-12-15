@@ -90,19 +90,4 @@ pipeline {
             }
         }
     }
-    
-    post {
-        success {
-            echo 'Pipeline completed successfully!'
-            mail to: 'your-email@example.com',
-                 subject: "Pipeline Success: ${env.JOB_NAME}",
-                 body: "Build ${env.BUILD_NUMBER} deployed successfully to EC2."
-        }
-        failure {
-            echo 'Pipeline failed!'
-            mail to: 'your-email@example.com',
-                 subject: "Pipeline Failed: ${env.JOB_NAME}",
-                 body: "Build ${env.BUILD_NUMBER} failed. Check Jenkins for details."
-        }
-    }
 }
