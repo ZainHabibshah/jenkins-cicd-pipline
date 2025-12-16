@@ -46,39 +46,47 @@ pipeline {
         }
         
         stage('Deploy to EC2') {
-            steps {
-                sshagent(['ec2-ssh-key']) {
-                    sh """
-                        # Copy files to EC2
-                        scp -o StrictHostKeyChecking=no deployment.tar.gz ubuntu@${EC2_HOST}:${APP_DIR}/
-                        
-                        # SSH and deploy
-                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "
-                            cd ${APP_DIR}
-                            
-                            # Stop existing app
-                            pm2 stop all 2>/dev/null || true
-                            
-                            # Extract new version
-                            tar -xzf deployment.tar.gz
-                            rm deployment.tar.gz
-                            
-                            # Install/update dependencies
-                            npm install --production
-                            
-                            # Start application with PM2
-                            pm2 start app.js --name 'cicd-demo' --update-env
-                            pm2 save
-                            
-                            # Setup PM2 to start on boot
-                            sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
-                            
-                            echo 'Deployment completed!'
-                        "
-                    """
-                }
-            }
+    steps {
+        sshagent(['ec2-ssh-key']) {
+            sh '''
+                # Test connection first
+                ssh -o StrictHostKeyChecking=no ubuntu@'${EC2_HOST}' "echo 'SSH connection successful'"
+                
+                # Copy files
+                scp -o StrictHostKeyChecking=no deployment.tar.gz ubuntu@'${EC2_HOST}':'${APP_DIR}'/
+                
+                # Deploy using a script
+                ssh -o StrictHostKeyChecking=no ubuntu@'${EC2_HOST}' '
+                    cd '${APP_DIR}'
+                    
+                    # Stop existing app
+                    pm2 stop all 2>/dev/null || true
+                    
+                    # Backup existing files if needed
+                    if [ -d current ]; then
+                        mv current backup_$(date +%Y%m%d_%H%M%S)
+                    fi
+                    
+                    # Extract new version
+                    tar -xzf deployment.tar.gz -C .
+                    rm deployment.tar.gz
+                    
+                    # Install dependencies
+                    npm install --production
+                    
+                    # Start application
+                    pm2 start app.js --name "cicd-demo" --update-env
+                    pm2 save
+                    
+                    # Only run startup once (comment out after first run)
+                    # pm2 startup systemd -u ubuntu --hp /home/ubuntu 2>/dev/null || true
+                    
+                    echo "Deployment completed successfully!"
+                '
+            '''
         }
+    }
+}
         
         stage('Health Check') {
             steps {
